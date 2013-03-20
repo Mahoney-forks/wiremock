@@ -8,7 +8,7 @@ apply plugin: 'jdepend'
 
 sourceCompatibility = 1.6
 group = 'com.github.tomakehurst'
-version = 1.31
+version = '1.32-SNAPSHOT'
 
 repositories {
 	mavenCentral()
@@ -142,9 +142,9 @@ artifacts {
      archives javadocJar
 }
 
-signing {
-    sign configurations.archives
-}
+//signing {
+//    sign configurations.archives
+//}
 
 if (!this.hasProperty('sonatypeUser')) sonatypeUser = 'default';
 if (!this.hasProperty('sonatypePassword')) sonatypePassword = 'default';
@@ -155,7 +155,7 @@ uploadArchives {
             repository(url: 'https://oss.sonatype.org/service/local/staging/deploy/maven2') {
             	authentication(userName: sonatypeUser , password: sonatypePassword)
         	};
-        	beforeDeployment { deployment -> signPom(deployment) };
+//        	beforeDeployment { deployment -> signPom(deployment) };
             pom.artifactId = 'wiremock'
             pom.project {
             	packaging 'jar'
