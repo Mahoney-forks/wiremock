@@ -30,7 +30,6 @@ import com.google.common.io.Resources;
 import org.apache.commons.lang3.ArrayUtils;
 import org.eclipse.jetty.http.MimeTypes;
 import org.eclipse.jetty.io.NetworkTrafficListener;
-import org.eclipse.jetty.proxy.ConnectHandler;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.HandlerWrapper;
@@ -88,24 +87,32 @@ public class JettyHttpServer implements HttpServer {
             jettyServer.addConnector(httpConnector);
         }
 
+        SslConnectionFactory sslConnectionFactory = buildSslConnectionFactory(options.httpsSettings());
         if (options.httpsSettings().enabled()) {
             httpsConnector = createHttpsConnector(
                     jettyServer,
                     options.bindAddress(),
                     options.httpsSettings(),
                     options.jettySettings(),
-                    networkTrafficListenerAdapter);
+                    networkTrafficListenerAdapter,
+                    sslConnectionFactory
+            );
             jettyServer.addConnector(httpsConnector);
         } else {
             httpsConnector = null;
         }
 
-        jettyServer.setHandler(createHandler(options, adminRequestHandler, stubRequestHandler));
+        jettyServer.setHandler(createHandler(options, adminRequestHandler, stubRequestHandler, sslConnectionFactory));
 
         finalizeSetup(options);
     }
 
-    protected HandlerCollection createHandler(Options options, AdminRequestHandler adminRequestHandler, StubRequestHandler stubRequestHandler) {
+    protected HandlerCollection createHandler(
+        Options options,
+        AdminRequestHandler adminRequestHandler,
+        StubRequestHandler stubRequestHandler,
+        SslConnectionFactory sslConnectionFactory
+    ) {
         Notifier notifier = options.notifier();
         ServletContextHandler adminContext = addAdminContext(
                 adminRequestHandler,
@@ -129,7 +136,7 @@ public class JettyHttpServer implements HttpServer {
             addGZipHandler(mockServiceContext, handlers);
         }
 
-        handlers.addHandler(new ConnectHandler());
+        handlers.addHandler(new ConnectHandler(sslConnectionFactory));
 
         return handlers;
     }
@@ -264,19 +271,9 @@ public class JettyHttpServer implements HttpServer {
             String bindAddress,
             HttpsSettings httpsSettings,
             JettySettings jettySettings,
-            NetworkTrafficListener listener) {
-
-        //Added to support Android https communication.
-        SslContextFactory sslContextFactory = buildSslContextFactory();
-
-        sslContextFactory.setKeyStorePath(httpsSettings.keyStorePath());
-        sslContextFactory.setKeyManagerPassword(httpsSettings.keyStorePassword());
-        sslContextFactory.setKeyStoreType(httpsSettings.keyStoreType());
-        if (httpsSettings.hasTrustStore()) {
-            sslContextFactory.setTrustStorePath(httpsSettings.trustStorePath());
-            sslContextFactory.setTrustStorePassword(httpsSettings.trustStorePassword());
-        }
-        sslContextFactory.setNeedClientAuth(httpsSettings.needClientAuth());
+            NetworkTrafficListener listener,
+            SslConnectionFactory sslConnectionFactory
+    ) {
 
         HttpConfiguration httpConfig = createHttpConfig(jettySettings);
         httpConfig.addCustomizer(new SecureRequestCustomizer());
@@ -284,10 +281,6 @@ public class JettyHttpServer implements HttpServer {
         final int port = httpsSettings.port();
 
         HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory(httpConfig);
-        SslConnectionFactory sslConnectionFactory = new SslConnectionFactory(
-                sslContextFactory,
-                "http/1.1"
-        );
         ConnectionFactory[] connectionFactories = ArrayUtils.addAll(
                 new ConnectionFactory[] { sslConnectionFactory, httpConnectionFactory },
                 buildAdditionalConnectionFactories(httpsSettings, httpConnectionFactory, sslConnectionFactory)
@@ -299,6 +292,23 @@ public class JettyHttpServer implements HttpServer {
                 port,
                 listener,
                 connectionFactories
+        );
+    }
+
+    private SslConnectionFactory buildSslConnectionFactory(HttpsSettings httpsSettings) {
+        SslContextFactory sslContextFactory = buildSslContextFactory();
+
+        sslContextFactory.setKeyStorePath(httpsSettings.keyStorePath());
+        sslContextFactory.setKeyManagerPassword(httpsSettings.keyStorePassword());
+        sslContextFactory.setKeyStoreType(httpsSettings.keyStoreType());
+        if (httpsSettings.hasTrustStore()) {
+            sslContextFactory.setTrustStorePath(httpsSettings.trustStorePath());
+            sslContextFactory.setTrustStorePassword(httpsSettings.trustStorePassword());
+        }
+        sslContextFactory.setNeedClientAuth(httpsSettings.needClientAuth());
+        return new SslConnectionFactory(
+                sslContextFactory,
+                "http/1.1"
         );
     }
 
@@ -324,10 +334,11 @@ public class JettyHttpServer implements HttpServer {
     }
 
     protected ServerConnector createServerConnector(String bindAddress,
-                                                    JettySettings jettySettings,
-                                                    int port,
-                                                    NetworkTrafficListener listener,
-                                                    ConnectionFactory... connectionFactories) {
+            JettySettings jettySettings,
+            int port,
+            NetworkTrafficListener listener,
+            ConnectionFactory... connectionFactories
+    ) {
 
         int acceptors = jettySettings.getAcceptors().or(DEFAULT_ACCEPTORS);
         NetworkTrafficServerConnector connector = new NetworkTrafficServerConnector(
@@ -347,7 +358,7 @@ public class JettyHttpServer implements HttpServer {
         return connector;
     }
 
-    private void setJettySettings(JettySettings jettySettings, ServerConnector connector) {
+    private static void setJettySettings(JettySettings jettySettings, ServerConnector connector) {
         if (jettySettings.getAcceptQueueSize().isPresent()) {
             connector.setAcceptQueueSize(jettySettings.getAcceptQueueSize().get());
         }

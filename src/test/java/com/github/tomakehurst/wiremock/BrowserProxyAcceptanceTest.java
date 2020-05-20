@@ -16,6 +16,7 @@
 package com.github.tomakehurst.wiremock;
 
 import com.github.tomakehurst.wiremock.junit.WireMockClassRule;
+import com.github.tomakehurst.wiremock.testsupport.TestFiles;
 import com.github.tomakehurst.wiremock.testsupport.WireMockTestClient;
 import org.junit.*;
 
@@ -26,9 +27,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class BrowserProxyAcceptanceTest {
 
+    private static final String CERTIFICATE_NOT_TRUSTED_BY_TEST_CLIENT = TestFiles.KEY_STORE_PATH;
+
     @ClassRule
     public static WireMockClassRule target = new WireMockClassRule(wireMockConfig()
             .dynamicPort()
+            .keystorePath(CERTIFICATE_NOT_TRUSTED_BY_TEST_CLIENT)
             .dynamicHttpsPort()
     );
 
