@@ -136,7 +136,7 @@ public class JettyHttpServer implements HttpServer {
             addGZipHandler(mockServiceContext, handlers);
         }
 
-        handlers.addHandler(new ConnectHandler(sslConnectionFactory));
+        handlers.addHandler(new ConnectHandler(sslConnectionFactory, createHttpConfig(options.jettySettings())));
 
         return handlers;
     }
