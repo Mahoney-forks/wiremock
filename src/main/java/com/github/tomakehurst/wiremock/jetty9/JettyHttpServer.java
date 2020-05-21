@@ -28,6 +28,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import org.apache.commons.lang3.ArrayUtils;
+import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http.MimeTypes;
 import org.eclipse.jetty.io.NetworkTrafficListener;
 import org.eclipse.jetty.server.*;
@@ -87,32 +88,24 @@ public class JettyHttpServer implements HttpServer {
             jettyServer.addConnector(httpConnector);
         }
 
-        SslConnectionFactory sslConnectionFactory = buildSslConnectionFactory(options.httpsSettings());
         if (options.httpsSettings().enabled()) {
             httpsConnector = createHttpsConnector(
                     jettyServer,
                     options.bindAddress(),
                     options.httpsSettings(),
                     options.jettySettings(),
-                    networkTrafficListenerAdapter,
-                    sslConnectionFactory
-            );
+                    networkTrafficListenerAdapter);
             jettyServer.addConnector(httpsConnector);
         } else {
             httpsConnector = null;
         }
 
-        jettyServer.setHandler(createHandler(options, adminRequestHandler, stubRequestHandler, sslConnectionFactory));
+        jettyServer.setHandler(createHandler(options, adminRequestHandler, stubRequestHandler));
 
         finalizeSetup(options);
     }
 
-    protected HandlerCollection createHandler(
-        Options options,
-        AdminRequestHandler adminRequestHandler,
-        StubRequestHandler stubRequestHandler,
-        SslConnectionFactory sslConnectionFactory
-    ) {
+    protected HandlerCollection createHandler(Options options, AdminRequestHandler adminRequestHandler, StubRequestHandler stubRequestHandler) {
         Notifier notifier = options.notifier();
         ServletContextHandler adminContext = addAdminContext(
                 adminRequestHandler,
@@ -135,8 +128,6 @@ public class JettyHttpServer implements HttpServer {
         } else {
             addGZipHandler(mockServiceContext, handlers);
         }
-
-        handlers.addHandler(new ConnectHandler(sslConnectionFactory, createHttpConfig(options.jettySettings())));
 
         return handlers;
     }
@@ -271,31 +262,9 @@ public class JettyHttpServer implements HttpServer {
             String bindAddress,
             HttpsSettings httpsSettings,
             JettySettings jettySettings,
-            NetworkTrafficListener listener,
-            SslConnectionFactory sslConnectionFactory
-    ) {
+            NetworkTrafficListener listener) {
 
-        HttpConfiguration httpConfig = createHttpConfig(jettySettings);
-        httpConfig.addCustomizer(new SecureRequestCustomizer());
-
-        final int port = httpsSettings.port();
-
-        HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory(httpConfig);
-        ConnectionFactory[] connectionFactories = ArrayUtils.addAll(
-                new ConnectionFactory[] { sslConnectionFactory, httpConnectionFactory },
-                buildAdditionalConnectionFactories(httpsSettings, httpConnectionFactory, sslConnectionFactory)
-        );
-
-        return createServerConnector(
-                bindAddress,
-                jettySettings,
-                port,
-                listener,
-                connectionFactories
-        );
-    }
-
-    private SslConnectionFactory buildSslConnectionFactory(HttpsSettings httpsSettings) {
+        //Added to support Android https communication.
         SslContextFactory sslContextFactory = buildSslContextFactory();
 
         sslContextFactory.setKeyStorePath(httpsSettings.keyStorePath());
@@ -306,9 +275,31 @@ public class JettyHttpServer implements HttpServer {
             sslContextFactory.setTrustStorePassword(httpsSettings.trustStorePassword());
         }
         sslContextFactory.setNeedClientAuth(httpsSettings.needClientAuth());
-        return new SslConnectionFactory(
+
+        HttpConfiguration httpConfig = createHttpConfig(jettySettings);
+        httpConfig.addCustomizer(new SecureRequestCustomizer());
+
+        final int port = httpsSettings.port();
+
+        HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory(httpConfig);
+        SslConnectionFactory sslConnectionFactory = new SslConnectionFactory(
                 sslContextFactory,
                 "http/1.1"
+        );
+        ConnectionFactory[] connectionFactories = ArrayUtils.addAll(
+                new ConnectionFactory[] {
+                        sslConnectionFactory,
+                        httpConnectionFactory
+                },
+                buildAdditionalConnectionFactories(httpsSettings, httpConnectionFactory, sslConnectionFactory)
+        );
+
+        return createServerConnector(
+                bindAddress,
+                jettySettings,
+                port,
+                listener,
+                connectionFactories
         );
     }
 
@@ -358,7 +349,7 @@ public class JettyHttpServer implements HttpServer {
         return connector;
     }
 
-    private static void setJettySettings(JettySettings jettySettings, ServerConnector connector) {
+    private void setJettySettings(JettySettings jettySettings, ServerConnector connector) {
         if (jettySettings.getAcceptQueueSize().isPresent()) {
             connector.setAcceptQueueSize(jettySettings.getAcceptQueueSize().get());
         }

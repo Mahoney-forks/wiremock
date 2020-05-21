@@ -9,6 +9,7 @@ import com.github.tomakehurst.wiremock.jetty9.DefaultMultipartRequestConfigurer;
 import com.github.tomakehurst.wiremock.jetty9.JettyHttpServer;
 import com.github.tomakehurst.wiremock.servlet.MultipartRequestConfigurer;
 import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
+import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http2.HTTP2Cipher;
 import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.io.NetworkTrafficListener;
@@ -58,6 +59,23 @@ public class Jetty94HttpServer extends JettyHttpServer {
                 listener,
                 connectionFactories
         );
+    }
+
+    @Override
+    protected HttpConfiguration createHttpConfig(JettySettings jettySettings) {
+        HttpConfiguration httpConfig = super.createHttpConfig(jettySettings);
+        httpConfig.addCustomizer(new HttpConfiguration.Customizer() {
+            @Override
+            public void customize(Connector connector, HttpConfiguration channelConfig, Request request) {
+                if (connector instanceof HasForwardProxyHostAndPort) {
+                    HasForwardProxyHostAndPort hasForwardProxyHostAndPort = (HasForwardProxyHostAndPort) connector;
+                    request.setHttpURI(new HttpURI("https://" + hasForwardProxyHostAndPort.getProxyHostAndPort() + request.getPathInfo()));
+                    request.setSecure(true);
+                    request.setScheme("https");
+                }
+            }
+        });
+        return httpConfig;
     }
 
     private SslContextFactory.Server buildHttp2SslContextFactory(HttpsSettings httpsSettings) {

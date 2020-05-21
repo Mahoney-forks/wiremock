@@ -16,18 +16,29 @@
 package com.github.tomakehurst.wiremock;
 
 import com.github.tomakehurst.wiremock.junit.WireMockClassRule;
+import com.github.tomakehurst.wiremock.testsupport.TestFiles;
 import com.github.tomakehurst.wiremock.testsupport.WireMockTestClient;
-import org.junit.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-import static org.hamcrest.Matchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 public class BrowserProxyAcceptanceTest {
 
+    private static final String CERTIFICATE_NOT_TRUSTED_BY_TEST_CLIENT = TestFiles.KEY_STORE_PATH;
+
     @ClassRule
-    public static WireMockClassRule target = new WireMockClassRule(wireMockConfig().dynamicPort());
+    public static WireMockClassRule target = new WireMockClassRule(wireMockConfig()
+            .dynamicPort()
+            .keystorePath(CERTIFICATE_NOT_TRUSTED_BY_TEST_CLIENT)
+            .dynamicHttpsPort()
+    );
 
     @Rule
     public WireMockClassRule instanceRule = target;
@@ -53,21 +64,13 @@ public class BrowserProxyAcceptanceTest {
     }
 
     @Test
-    public void canProxyHttp() {
+    public void canProxyHttps() throws Exception {
         target.stubFor(get(urlEqualTo("/whatever")).willReturn(aResponse().withBody("Got it")));
 
-        assertThat(testClient.getViaProxy(url("/whatever"), proxy.port()).content(), is("Got it"));
+        assertThat(testClient.getViaProxy(httpsUrl("/whatever"), proxy.port()).content(), is("Got it"));
     }
 
-    @Test
-    public void passesQueryParameters() {
-        target.stubFor(get(urlEqualTo("/search?q=things&limit=10")).willReturn(aResponse().withStatus(200)));
-
-        assertThat(testClient.getViaProxy(url("/search?q=things&limit=10"), proxy.port()).statusCode(), is(200));
+    private String httpsUrl(String pathAndQuery) {
+        return "https://localhost:" + target.httpsPort() + pathAndQuery;
     }
-
-    private String url(String pathAndQuery) {
-        return "http://localhost:" + target.port() + pathAndQuery;
-    }
-
 }

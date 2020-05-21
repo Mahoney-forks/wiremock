@@ -1,4 +1,4 @@
-package com.github.tomakehurst.wiremock.jetty9;
+package com.github.tomakehurst.wiremock.jetty94;
 
 import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.io.EndPoint;
@@ -16,11 +16,11 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 
-class DelegatingConnector<T extends Connector & Container> implements Connector, Container {
+class ConnectorFacade implements Connector {
 
-    private final T delegate;
+    private final Connector delegate;
 
-    DelegatingConnector(T delegate) {
+    ConnectorFacade(Connector delegate) {
         this.delegate = delegate;
     }
 
@@ -153,6 +153,11 @@ class DelegatingConnector<T extends Connector & Container> implements Connector,
     }
 
     @Override
+    public boolean addBean(Object o, boolean managed) {
+        return delegate.addBean(o, managed);
+    }
+
+    @Override
     public Collection<Object> getBeans() {
         return delegate.getBeans();
     }
@@ -180,5 +185,30 @@ class DelegatingConnector<T extends Connector & Container> implements Connector,
     @Override
     public void removeEventListener(Container.Listener listener) {
         delegate.removeEventListener(listener);
+    }
+
+    @Override
+    public void unmanage(Object bean) {
+        delegate.unmanage(bean);
+    }
+
+    @Override
+    public void manage(Object bean) {
+        delegate.manage(bean);
+    }
+
+    @Override
+    public boolean isManaged(Object bean) {
+        return delegate.isManaged(bean);
+    }
+
+    @Override
+    public <T> Collection<T> getContainedBeans(Class<T> clazz) {
+        return delegate.getContainedBeans(clazz);
+    }
+
+    @Override
+    public boolean isShutdown() {
+        return delegate.isShutdown();
     }
 }
