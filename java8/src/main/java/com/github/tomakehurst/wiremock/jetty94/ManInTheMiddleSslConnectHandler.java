@@ -14,11 +14,11 @@ import java.io.IOException;
 
 import static org.eclipse.jetty.http.HttpMethod.CONNECT;
 
-public class ManInTheMiddleSslConnectHandler extends AbstractHandler {
+class ManInTheMiddleSslConnectHandler extends AbstractHandler {
 
     private final SslConnectionFactory sslConnectionFactory;
 
-    public ManInTheMiddleSslConnectHandler(SslConnectionFactory sslConnectionFactory) {
+    ManInTheMiddleSslConnectHandler(SslConnectionFactory sslConnectionFactory) {
         this.sslConnectionFactory = sslConnectionFactory;
     }
 
@@ -55,7 +55,7 @@ public class ManInTheMiddleSslConnectHandler extends AbstractHandler {
         final String hostAndPort = baseRequest.getPathInfo();
         final HttpConnection transport = (HttpConnection) baseRequest.getHttpChannel().getHttpTransport();
         EndPoint endpoint = transport.getEndPoint();
-        Connector connector = new ConnectorWithForwardProxyHostAndPort(transport.getConnector(), hostAndPort);
+        Connector connector = new ConnectorWithHttpsForwardProxyHostAndPort(transport.getConnector(), hostAndPort);
         Connection connection = sslConnectionFactory.newConnection(connector, endpoint);
         endpoint.setConnection(connection);
         connection.onOpen();

@@ -9,14 +9,11 @@ import com.github.tomakehurst.wiremock.jetty9.DefaultMultipartRequestConfigurer;
 import com.github.tomakehurst.wiremock.jetty9.JettyHttpServer;
 import com.github.tomakehurst.wiremock.servlet.MultipartRequestConfigurer;
 import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
-import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http2.HTTP2Cipher;
 import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.io.NetworkTrafficListener;
-import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
@@ -96,17 +93,7 @@ public class Jetty94HttpServer extends JettyHttpServer {
         HttpConfiguration httpConfig = super.createHttpConfig(jettySettings);
         httpConfig.setSendXPoweredBy(false);
         httpConfig.setSendServerVersion(false);
-        httpConfig.addCustomizer(new HttpConfiguration.Customizer() {
-            @Override
-            public void customize(Connector connector, HttpConfiguration channelConfig, Request request) {
-                if (connector instanceof HasForwardProxyHostAndPort) {
-                    HasForwardProxyHostAndPort hasForwardProxyHostAndPort = (HasForwardProxyHostAndPort) connector;
-                    request.setHttpURI(new HttpURI("https://" + hasForwardProxyHostAndPort.getProxyHostAndPort() + request.getPathInfo()));
-                    request.setSecure(true);
-                    request.setScheme("https");
-                }
-            }
-        });
+        httpConfig.addCustomizer(new HttpsForwardProxyRequestCustomizer());
         httpConfig.addCustomizer(new SecureRequestCustomizer());
         return httpConfig;
     }

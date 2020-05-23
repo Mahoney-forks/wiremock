@@ -1,5 +1,5 @@
 package com.github.tomakehurst.wiremock.jetty94;
 
-public interface HasForwardProxyHostAndPort {
+interface HasHttpsForwardProxyHostAndPort {
     String getProxyHostAndPort();
 }
