@@ -31,15 +31,6 @@ public class Jetty94HttpServer extends JettyHttpServer {
     }
 
     @Override
-    protected HandlerCollection createHandler(Options options, AdminRequestHandler adminRequestHandler, StubRequestHandler stubRequestHandler) {
-        HandlerCollection handler = super.createHandler(options, adminRequestHandler, stubRequestHandler);
-        handler.addHandler(new ManInTheMiddleSslConnectHandler(
-                sslConnectionFactory(options.httpsSettings())
-        ));
-        return handler;
-    }
-
-    @Override
     protected MultipartRequestConfigurer buildMultipartRequestConfigurer() {
         return new DefaultMultipartRequestConfigurer();
     }
@@ -47,73 +38,41 @@ public class Jetty94HttpServer extends JettyHttpServer {
     @Override
     protected ServerConnector createHttpConnector(String bindAddress, int port, JettySettings jettySettings, NetworkTrafficListener listener) {
 
-        HttpConfiguration httpConfig = createHttpConfig(jettySettings);
-        httpConfig.setSecurePort(0);
-        httpConfig.setSendXPoweredBy(false);
-        httpConfig.setSendServerVersion(false);
-        httpConfig.addCustomizer(new SecureRequestCustomizer());
-
-        HttpConnectionFactory http = new HttpConnectionFactory(httpConfig);
-        HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpConfig);
-
-        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+        ConnectionFactories connectionFactories = buildConnectionFactories(jettySettings, 0);
         return createServerConnector(
                 bindAddress,
                 jettySettings,
                 port,
                 listener,
-                http,
-                alpn,
-                h2
+                // http needs to be the first (the default)
+                connectionFactories.http,
+                // alpn & h2 are included so that HTTPS forward proxying can find them
+                connectionFactories.alpn,
+                connectionFactories.h2
         );
     }
 
     @Override
     protected ServerConnector createHttpsConnector(Server server, String bindAddress, HttpsSettings httpsSettings, JettySettings jettySettings, NetworkTrafficListener listener) {
 
-        HttpConfiguration httpConfig = createHttpConfig(jettySettings);
-        httpConfig.setSecurePort(httpsSettings.port());
-        httpConfig.setSendXPoweredBy(false);
-        httpConfig.setSendServerVersion(false);
-        httpConfig.addCustomizer(new SecureRequestCustomizer());
-
-        HttpConnectionFactory http = new HttpConnectionFactory(httpConfig);
-        HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpConfig);
-
-        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+        ConnectionFactories connectionFactories = buildConnectionFactories(jettySettings, httpsSettings.port());
+        SslConnectionFactory ssl = sslConnectionFactory(httpsSettings);
 
         return createServerConnector(
                 bindAddress,
                 jettySettings,
                 httpsSettings.port(),
                 listener,
-                sslConnectionFactory(httpsSettings),
-                alpn,
-                h2,
-                http
+                ssl,
+                connectionFactories.alpn,
+                connectionFactories.h2,
+                connectionFactories.http
         );
     }
 
     private SslConnectionFactory sslConnectionFactory(HttpsSettings httpsSettings) {
         SslContextFactory.Server http2SslContextFactory = buildHttp2SslContextFactory(httpsSettings);
         return new SslConnectionFactory(http2SslContextFactory, "alpn");
-    }
-
-    @Override
-    protected HttpConfiguration createHttpConfig(JettySettings jettySettings) {
-        HttpConfiguration httpConfig = super.createHttpConfig(jettySettings);
-        httpConfig.addCustomizer(new HttpConfiguration.Customizer() {
-            @Override
-            public void customize(Connector connector, HttpConfiguration channelConfig, Request request) {
-                if (connector instanceof HasForwardProxyHostAndPort) {
-                    HasForwardProxyHostAndPort hasForwardProxyHostAndPort = (HasForwardProxyHostAndPort) connector;
-                    request.setHttpURI(new HttpURI("https://" + hasForwardProxyHostAndPort.getProxyHostAndPort() + request.getPathInfo()));
-                    request.setSecure(true);
-                    request.setScheme("https");
-                }
-            }
-        });
-        return httpConfig;
     }
 
     private SslContextFactory.Server buildHttp2SslContextFactory(HttpsSettings httpsSettings) {
@@ -130,5 +89,68 @@ public class Jetty94HttpServer extends JettyHttpServer {
         sslContextFactory.setCipherComparator(HTTP2Cipher.COMPARATOR);
         sslContextFactory.setProvider("Conscrypt");
         return sslContextFactory;
+    }
+
+    @Override
+    protected HttpConfiguration createHttpConfig(JettySettings jettySettings) {
+        HttpConfiguration httpConfig = super.createHttpConfig(jettySettings);
+        httpConfig.setSendXPoweredBy(false);
+        httpConfig.setSendServerVersion(false);
+        httpConfig.addCustomizer(new HttpConfiguration.Customizer() {
+            @Override
+            public void customize(Connector connector, HttpConfiguration channelConfig, Request request) {
+                if (connector instanceof HasForwardProxyHostAndPort) {
+                    HasForwardProxyHostAndPort hasForwardProxyHostAndPort = (HasForwardProxyHostAndPort) connector;
+                    request.setHttpURI(new HttpURI("https://" + hasForwardProxyHostAndPort.getProxyHostAndPort() + request.getPathInfo()));
+                    request.setSecure(true);
+                    request.setScheme("https");
+                }
+            }
+        });
+        httpConfig.addCustomizer(new SecureRequestCustomizer());
+        return httpConfig;
+    }
+
+    @Override
+    protected HandlerCollection createHandler(
+        Options options,
+        AdminRequestHandler adminRequestHandler,
+        StubRequestHandler stubRequestHandler
+    ) {
+        HandlerCollection handler = super.createHandler(options, adminRequestHandler, stubRequestHandler);
+
+        ManInTheMiddleSslConnectHandler manInTheMiddleSslConnectHandler = new ManInTheMiddleSslConnectHandler(
+                sslConnectionFactory(options.httpsSettings())
+        );
+
+        handler.addHandler(manInTheMiddleSslConnectHandler);
+
+        return handler;
+    }
+
+    private ConnectionFactories buildConnectionFactories(
+        JettySettings jettySettings,
+        int securePort
+    ) {
+        HttpConfiguration httpConfig = createHttpConfig(jettySettings);
+        httpConfig.setSecurePort(securePort);
+
+        HttpConnectionFactory http = new HttpConnectionFactory(httpConfig);
+        HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpConfig);
+        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+
+        return new ConnectionFactories(http, h2, alpn);
+    }
+
+    private static class ConnectionFactories {
+        private final HttpConnectionFactory http;
+        private final HTTP2ServerConnectionFactory h2;
+        private final ALPNServerConnectionFactory alpn;
+
+        private ConnectionFactories(HttpConnectionFactory http, HTTP2ServerConnectionFactory h2, ALPNServerConnectionFactory alpn) {
+            this.http = http;
+            this.h2 = h2;
+            this.alpn = alpn;
+        }
     }
 }
