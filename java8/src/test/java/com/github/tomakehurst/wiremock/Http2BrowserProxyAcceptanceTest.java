@@ -29,7 +29,7 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-public class BrowserProxyAcceptanceTest {
+public class Http2BrowserProxyAcceptanceTest {
 
     private static final String CERTIFICATE_NOT_TRUSTED_BY_TEST_CLIENT = TestFiles.KEY_STORE_PATH;
 

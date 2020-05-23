@@ -13,7 +13,15 @@ import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http2.HTTP2Cipher;
 import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.io.NetworkTrafficListener;
-import org.eclipse.jetty.server.*;
+import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 public class Jetty94HttpServer extends JettyHttpServer {
@@ -23,16 +31,47 @@ public class Jetty94HttpServer extends JettyHttpServer {
     }
 
     @Override
+    protected HandlerCollection createHandler(Options options, AdminRequestHandler adminRequestHandler, StubRequestHandler stubRequestHandler) {
+        HandlerCollection handler = super.createHandler(options, adminRequestHandler, stubRequestHandler);
+        handler.addHandler(new ManInTheMiddleSslConnectHandler(
+                sslConnectionFactory(options.httpsSettings())
+        ));
+        return handler;
+    }
+
+    @Override
     protected MultipartRequestConfigurer buildMultipartRequestConfigurer() {
         return new DefaultMultipartRequestConfigurer();
     }
 
     @Override
-    protected ServerConnector createHttpsConnector(Server server, String bindAddress, HttpsSettings httpsSettings, JettySettings jettySettings, NetworkTrafficListener listener) {
-        SslContextFactory.Server http2SslContextFactory = buildHttp2SslContextFactory(httpsSettings);
+    protected ServerConnector createHttpConnector(String bindAddress, int port, JettySettings jettySettings, NetworkTrafficListener listener) {
 
         HttpConfiguration httpConfig = createHttpConfig(jettySettings);
-        httpConfig.setSecureScheme("https");
+        httpConfig.setSecurePort(0);
+        httpConfig.setSendXPoweredBy(false);
+        httpConfig.setSendServerVersion(false);
+        httpConfig.addCustomizer(new SecureRequestCustomizer());
+
+        HttpConnectionFactory http = new HttpConnectionFactory(httpConfig);
+        HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpConfig);
+
+        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+        return createServerConnector(
+                bindAddress,
+                jettySettings,
+                port,
+                listener,
+                http,
+                alpn,
+                h2
+        );
+    }
+
+    @Override
+    protected ServerConnector createHttpsConnector(Server server, String bindAddress, HttpsSettings httpsSettings, JettySettings jettySettings, NetworkTrafficListener listener) {
+
+        HttpConfiguration httpConfig = createHttpConfig(jettySettings);
         httpConfig.setSecurePort(httpsSettings.port());
         httpConfig.setSendXPoweredBy(false);
         httpConfig.setSendServerVersion(false);
@@ -43,22 +82,21 @@ public class Jetty94HttpServer extends JettyHttpServer {
 
         ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
 
-        SslConnectionFactory ssl = new SslConnectionFactory(http2SslContextFactory, alpn.getProtocol());
-
-        ConnectionFactory[] connectionFactories = new ConnectionFactory[] {
-                ssl,
-                alpn,
-                h2,
-                http
-        };
-
         return createServerConnector(
                 bindAddress,
                 jettySettings,
                 httpsSettings.port(),
                 listener,
-                connectionFactories
+                sslConnectionFactory(httpsSettings),
+                alpn,
+                h2,
+                http
         );
+    }
+
+    private SslConnectionFactory sslConnectionFactory(HttpsSettings httpsSettings) {
+        SslContextFactory.Server http2SslContextFactory = buildHttp2SslContextFactory(httpsSettings);
+        return new SslConnectionFactory(http2SslContextFactory, "alpn");
     }
 
     @Override

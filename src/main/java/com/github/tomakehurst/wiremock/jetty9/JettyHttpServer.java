@@ -28,7 +28,6 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import org.apache.commons.lang3.ArrayUtils;
-import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http.MimeTypes;
 import org.eclipse.jetty.io.NetworkTrafficListener;
 import org.eclipse.jetty.server.*;
@@ -287,10 +286,7 @@ public class JettyHttpServer implements HttpServer {
                 "http/1.1"
         );
         ConnectionFactory[] connectionFactories = ArrayUtils.addAll(
-                new ConnectionFactory[] {
-                        sslConnectionFactory,
-                        httpConnectionFactory
-                },
+                new ConnectionFactory[] { sslConnectionFactory, httpConnectionFactory },
                 buildAdditionalConnectionFactories(httpsSettings, httpConnectionFactory, sslConnectionFactory)
         );
 
@@ -325,11 +321,10 @@ public class JettyHttpServer implements HttpServer {
     }
 
     protected ServerConnector createServerConnector(String bindAddress,
-            JettySettings jettySettings,
-            int port,
-            NetworkTrafficListener listener,
-            ConnectionFactory... connectionFactories
-    ) {
+                                                    JettySettings jettySettings,
+                                                    int port,
+                                                    NetworkTrafficListener listener,
+                                                    ConnectionFactory... connectionFactories) {
 
         int acceptors = jettySettings.getAcceptors().or(DEFAULT_ACCEPTORS);
         NetworkTrafficServerConnector connector = new NetworkTrafficServerConnector(

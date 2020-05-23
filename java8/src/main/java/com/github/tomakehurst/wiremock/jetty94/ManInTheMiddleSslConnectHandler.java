@@ -1,13 +1,9 @@
-package com.github.tomakehurst.wiremock.jetty9;
+package com.github.tomakehurst.wiremock.jetty94;
 
-import org.eclipse.jetty.http.HttpURI;
+import org.eclipse.jetty.io.Connection;
 import org.eclipse.jetty.io.EndPoint;
-import org.eclipse.jetty.io.ssl.SslConnection;
-import org.eclipse.jetty.server.ConnectionFactory;
 import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnection;
-import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.AbstractHandler;
@@ -18,17 +14,12 @@ import java.io.IOException;
 
 import static org.eclipse.jetty.http.HttpMethod.CONNECT;
 
-public class ConnectHandler extends AbstractHandler {
+public class ManInTheMiddleSslConnectHandler extends AbstractHandler {
 
     private final SslConnectionFactory sslConnectionFactory;
-    private final HttpConfiguration httpConfiguration;
 
-    public ConnectHandler(
-        SslConnectionFactory sslConnectionFactory,
-        HttpConfiguration httpConfiguration
-    ) {
+    public ManInTheMiddleSslConnectHandler(SslConnectionFactory sslConnectionFactory) {
         this.sslConnectionFactory = sslConnectionFactory;
-        this.httpConfiguration = httpConfiguration;
     }
 
     @Override
@@ -64,28 +55,10 @@ public class ConnectHandler extends AbstractHandler {
         final String hostAndPort = baseRequest.getPathInfo();
         final HttpConnection transport = (HttpConnection) baseRequest.getHttpChannel().getHttpTransport();
         EndPoint endpoint = transport.getEndPoint();
-        Connector connector = decorate(hostAndPort, transport.getConnector());
-        SslConnection connection = (SslConnection) sslConnectionFactory.newConnection(connector, endpoint);
+        Connector connector = new ConnectorWithForwardProxyHostAndPort(transport.getConnector(), hostAndPort);
+        Connection connection = sslConnectionFactory.newConnection(connector, endpoint);
         endpoint.setConnection(connection);
         connection.onOpen();
-    }
-
-    private Connector decorate(final String hostAndPort, final Connector connector) {
-        return new DelegatingConnector(connector) {
-            @Override
-            public ConnectionFactory getConnectionFactory(String nextProtocol) {
-                HttpConfiguration requestSpecific = new HttpConfiguration(httpConfiguration);
-                requestSpecific.addCustomizer(new HttpConfiguration.Customizer() {
-                    @Override
-                    public void customize(Connector connector, HttpConfiguration channelConfig, Request request) {
-                        request.setUri(new HttpURI("https://"+ hostAndPort +request.getPathInfo()));
-                        request.setSecure(true);
-                        request.setScheme("https");
-                    }
-                });
-                return new HttpConnectionFactory(requestSpecific);
-            }
-        };
     }
 
     private void sendConnectResponse(HttpServletResponse response) throws IOException {
