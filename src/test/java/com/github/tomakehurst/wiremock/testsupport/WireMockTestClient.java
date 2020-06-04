@@ -328,7 +328,7 @@ public class WireMockTestClient {
             .build();
     }
 
-    private static SSLContext buildTrustWireMockDefaultCertificateSSLContext() {
+    public static SSLContext buildTrustWireMockDefaultCertificateSSLContext() {
         try {
             return SSLContexts.custom().loadTrustMaterial(null, new TrustStrategy() {
                 @Override

@@ -15,4 +15,6 @@ dependencies {
 
     testCompile "org.eclipse.jetty:jetty-client:$jettyVersion"
     testCompile "org.eclipse.jetty.http2:http2-http-client-transport:$jettyVersion"
+
+    testCompile 'org.apache.httpcomponents.client5:httpclient5:5.0'
 }
