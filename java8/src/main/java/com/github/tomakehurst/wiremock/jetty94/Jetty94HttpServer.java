@@ -33,17 +33,18 @@ public class Jetty94HttpServer extends JettyHttpServer {
     }
 
     @Override
-    protected ServerConnector createHttpConnector(String bindAddress, int port, JettySettings jettySettings, NetworkTrafficListener listener) {
+    protected ServerConnector createHttpConnector(Options options, NetworkTrafficListener listener) {
 
-        ConnectionFactories connectionFactories = buildConnectionFactories(jettySettings, 0);
+        ConnectionFactories connectionFactories = buildConnectionFactories(options.jettySettings(), options.httpsSettings(), 0);
         return createServerConnector(
-                bindAddress,
-                jettySettings,
-                port,
+                options.bindAddress(),
+                options.jettySettings(),
+                options.portNumber(),
                 listener,
                 // http needs to be the first (the default)
                 connectionFactories.http,
-                // alpn & h2 are included so that HTTPS forward proxying can find them
+                // ssl, alpn & h2 are included so that HTTPS forward proxying can find them
+                connectionFactories.ssl,
                 connectionFactories.alpn,
                 connectionFactories.h2
         );
@@ -52,24 +53,18 @@ public class Jetty94HttpServer extends JettyHttpServer {
     @Override
     protected ServerConnector createHttpsConnector(Server server, String bindAddress, HttpsSettings httpsSettings, JettySettings jettySettings, NetworkTrafficListener listener) {
 
-        ConnectionFactories connectionFactories = buildConnectionFactories(jettySettings, httpsSettings.port());
-        SslConnectionFactory ssl = sslConnectionFactory(httpsSettings);
+        ConnectionFactories connectionFactories = buildConnectionFactories(jettySettings, httpsSettings, httpsSettings.port());
 
         return createServerConnector(
                 bindAddress,
                 jettySettings,
                 httpsSettings.port(),
                 listener,
-                ssl,
+                connectionFactories.ssl,
                 connectionFactories.alpn,
                 connectionFactories.h2,
                 connectionFactories.http
         );
-    }
-
-    private SslConnectionFactory sslConnectionFactory(HttpsSettings httpsSettings) {
-        SslContextFactory.Server http2SslContextFactory = buildHttp2SslContextFactory(httpsSettings);
-        return new SslConnectionFactory(http2SslContextFactory, "alpn");
     }
 
     private SslContextFactory.Server buildHttp2SslContextFactory(HttpsSettings httpsSettings) {
@@ -105,9 +100,7 @@ public class Jetty94HttpServer extends JettyHttpServer {
     ) {
         HandlerCollection handler = super.createHandler(options, adminRequestHandler, stubRequestHandler);
 
-        ManInTheMiddleSslConnectHandler manInTheMiddleSslConnectHandler = new ManInTheMiddleSslConnectHandler(
-                sslConnectionFactory(options.httpsSettings())
-        );
+        ManInTheMiddleSslConnectHandler manInTheMiddleSslConnectHandler = new ManInTheMiddleSslConnectHandler();
 
         handler.addHandler(manInTheMiddleSslConnectHandler);
 
@@ -116,6 +109,7 @@ public class Jetty94HttpServer extends JettyHttpServer {
 
     private ConnectionFactories buildConnectionFactories(
         JettySettings jettySettings,
+        HttpsSettings httpsSettings,
         int securePort
     ) {
         HttpConfiguration httpConfig = createHttpConfig(jettySettings);
@@ -123,20 +117,24 @@ public class Jetty94HttpServer extends JettyHttpServer {
 
         HttpConnectionFactory http = new HttpConnectionFactory(httpConfig);
         HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpConfig);
-        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory(h2.getProtocol().toLowerCase(), http.getProtocol().toLowerCase());
+        SslContextFactory.Server http2SslContextFactory = buildHttp2SslContextFactory(httpsSettings);
+        SslConnectionFactory ssl = new SslConnectionFactory(http2SslContextFactory, alpn.getProtocol());
 
-        return new ConnectionFactories(http, h2, alpn);
+        return new ConnectionFactories(http, h2, alpn, ssl);
     }
 
     private static class ConnectionFactories {
         private final HttpConnectionFactory http;
         private final HTTP2ServerConnectionFactory h2;
         private final ALPNServerConnectionFactory alpn;
+        private final SslConnectionFactory ssl;
 
-        private ConnectionFactories(HttpConnectionFactory http, HTTP2ServerConnectionFactory h2, ALPNServerConnectionFactory alpn) {
+        private ConnectionFactories(HttpConnectionFactory http, HTTP2ServerConnectionFactory h2, ALPNServerConnectionFactory alpn, SslConnectionFactory ssl) {
             this.http = http;
             this.h2 = h2;
             this.alpn = alpn;
+            this.ssl = ssl;
         }
     }
 }

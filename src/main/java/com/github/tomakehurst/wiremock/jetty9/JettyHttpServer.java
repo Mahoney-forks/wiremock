@@ -78,12 +78,7 @@ public class JettyHttpServer implements HttpServer {
         if (options.getHttpDisabled()) {
             httpConnector = null;
         } else {
-            httpConnector = createHttpConnector(
-                    options.bindAddress(),
-                    options.portNumber(),
-                    options.jettySettings(),
-                    networkTrafficListenerAdapter
-            );
+            httpConnector = createHttpConnector(options, networkTrafficListenerAdapter);
             jettyServer.addConnector(httpConnector);
         }
 
@@ -235,6 +230,15 @@ public class JettyHttpServer implements HttpServer {
 
     public long stopTimeout() {
         return jettyServer.getStopTimeout();
+    }
+
+    protected ServerConnector createHttpConnector(Options options, NetworkTrafficListener networkTrafficListener) {
+        return createHttpConnector(
+                options.bindAddress(),
+                options.portNumber(),
+                options.jettySettings(),
+                networkTrafficListener
+        );
     }
 
     protected ServerConnector createHttpConnector(
