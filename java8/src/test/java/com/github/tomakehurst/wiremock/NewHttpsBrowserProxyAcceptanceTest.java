@@ -69,8 +69,8 @@ public class NewHttpsBrowserProxyAcceptanceTest {
         List<HttpVersion> clientConnectOfferedProtocols,
         List<HttpVersion> clientGetOfferedProtocols
     ) throws Exception {
-        return ApacheHC4Client.buildClient(proxy, proxyScheme);
-//        return ApacheHC5Client.buildClient(proxy, proxyScheme);
+        HttpProxiedClientBuilder clientBuilder = new ApacheHC4ClientBuilder();
+        return clientBuilder.buildClient(proxyScheme.name(), proxyScheme == HTTP ? proxy.port() : proxy.httpsPort());
     }
 
     @ClassRule
