@@ -22,6 +22,7 @@ import com.github.tomakehurst.wiremock.http.ssl.SSLContextBuilder;
 import com.github.tomakehurst.wiremock.http.ssl.TrustEverythingStrategy;
 import com.github.tomakehurst.wiremock.http.ssl.TrustSelfSignedStrategy;
 import com.github.tomakehurst.wiremock.http.ssl.TrustSpecificHostsStrategy;
+import com.github.tomakehurst.wiremock.http.ssl.X509KeyStore;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -149,12 +150,12 @@ public class HttpClientFactory {
 
     private static SSLContext buildSSLContextWithTrustStore(KeyStoreSettings trustStoreSettings, boolean trustSelfSignedCertificates, List<String> trustedHosts) {
         try {
-            KeyStore trustStore = trustStoreSettings.loadStore();
+            X509KeyStore trustStore = trustStoreSettings.loadStore();
             SSLContextBuilder sslContextBuilder = SSLContextBuilder.create()
                     .loadKeyMaterial(trustStore, trustStoreSettings.password().toCharArray());
             if (trustSelfSignedCertificates) {
                 sslContextBuilder.loadTrustMaterial(new TrustSelfSignedStrategy());
-            } else if (containsCertificate(trustStore)) {
+            } else if (trustStore.containsCertificate()) {
                 sslContextBuilder.loadTrustMaterial(trustStore, new TrustSpecificHostsStrategy(trustedHosts));
             } else {
                 sslContextBuilder.loadTrustMaterial(new TrustSpecificHostsStrategy(trustedHosts));
@@ -164,21 +165,6 @@ public class HttpClientFactory {
         } catch (Exception e) {
             return throwUnchecked(e, SSLContext.class);
         }
-    }
-
-    private static boolean containsCertificate(KeyStore trustStore) throws KeyStoreException {
-        Enumeration<String> aliases = trustStore.aliases();
-        while (aliases.hasMoreElements()) {
-            String alias = aliases.nextElement();
-            try {
-                if (trustStore.getEntry(alias, null) instanceof KeyStore.TrustedCertificateEntry) {
-                    return true;
-                }
-            } catch (NoSuchAlgorithmException | UnrecoverableEntryException e) {
-                // ignore
-            }
-        }
-        return false;
     }
 
     private static SSLContext buildAllowAnythingSSLContext() {

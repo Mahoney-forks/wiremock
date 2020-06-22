@@ -15,6 +15,7 @@
  */
 package com.github.tomakehurst.wiremock.common;
 
+import com.github.tomakehurst.wiremock.http.ssl.X509KeyStore;
 import org.junit.Test;
 
 import java.security.KeyStore;
@@ -28,7 +29,7 @@ public class KeyStoreSettingsTest {
     public void loadsTrustStoreFromClasspath() {
         KeyStoreSettings trustStoreSettings = new KeyStoreSettings(TRUST_STORE_NAME, TRUST_STORE_PASSWORD, "jks");
 
-        KeyStore keyStore = trustStoreSettings.loadStore();
+        X509KeyStore keyStore = trustStoreSettings.loadStore();
         assertNotNull(keyStore);
     }
 
@@ -36,7 +37,7 @@ public class KeyStoreSettingsTest {
     public void loadsTrustStoreFromFilesystem() {
         KeyStoreSettings trustStoreSettings = new KeyStoreSettings(TRUST_STORE_PATH, TRUST_STORE_PASSWORD, "jks");
 
-        KeyStore keyStore = trustStoreSettings.loadStore();
+        X509KeyStore keyStore = trustStoreSettings.loadStore();
         assertNotNull(keyStore);
     }
 

@@ -27,8 +27,8 @@ public class GetCaCertTask implements AdminTask {
         BrowserProxySettings browserProxySettings = admin.getOptions().browserProxySettings();
         KeyStoreSettings caKeyStore = browserProxySettings.caKeyStore();
         try {
-            X509KeyStore x509KeyStore = new X509KeyStore(caKeyStore.loadStore(), caKeyStore.password().toCharArray());
-            X509Certificate certificate = x509KeyStore.getCertificateAuthority().certificateChain()[0];
+            X509KeyStore x509KeyStore = caKeyStore.loadStore();
+            X509Certificate certificate = x509KeyStore.getCertificateAuthority().issuer();
             return new ResponseDefinitionBuilder()
                     .withStatus(HTTP_OK)
                     .withHeader("Content-Type", "application/x-pem-file")

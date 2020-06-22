@@ -42,12 +42,12 @@ import static com.github.tomakehurst.wiremock.common.Exceptions.throwUnchecked;
 import static java.util.Objects.requireNonNull;
 
 @SuppressWarnings("sunapi")
-public class CertificateAuthority {
+public class SunCertificateAuthority implements CertificateAuthority {
 
     private final X509Certificate[] certificateChain;
     private final PrivateKey key;
 
-    public CertificateAuthority(X509Certificate[] certificateChain, PrivateKey key) {
+    public SunCertificateAuthority(X509Certificate[] certificateChain, PrivateKey key) {
         this.certificateChain = requireNonNull(certificateChain);
         if (certificateChain.length == 0) {
             throw new IllegalArgumentException("Chain must have entries");
@@ -55,7 +55,7 @@ public class CertificateAuthority {
         this.key = requireNonNull(key);
     }
 
-    public static CertificateAuthority generateCertificateAuthority() throws CertificateGenerationUnsupportedException {
+    public static SunCertificateAuthority generateCertificateAuthority() throws CertificateGenerationUnsupportedException {
         try {
             KeyPair pair = generateKeyPair("RSA");
             String sigAlg = "SHA256WithRSA";
@@ -63,7 +63,7 @@ public class CertificateAuthority {
 
             X509CertImpl certificate = selfSign(info, pair.getPrivate(), sigAlg);
 
-            return new CertificateAuthority(new X509Certificate[] { certificate }, pair.getPrivate());
+            return new SunCertificateAuthority(new X509Certificate[] { certificate }, pair.getPrivate());
         } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | CertificateException | SignatureException | NoSuchMethodError | VerifyError | NoClassDefFoundError | IOException e) {
             throw new CertificateGenerationUnsupportedException(
                     "Your runtime does not support generating certificates at runtime",
@@ -100,17 +100,25 @@ public class CertificateAuthority {
         }
     }
 
+    @Override
     public X509Certificate[] certificateChain() {
         return certificateChain;
     }
 
+    @Override
+    public X509Certificate issuer() {
+        return certificateChain[0];
+    }
+
+    @Override
     public PrivateKey key() {
         return key;
     }
 
-    CertChainAndKey generateCertificate(
-        String keyType,
-        SNIHostName hostName
+    @Override
+    public CertChainAndKey generateCertificate(
+            String keyType,
+            SNIHostName hostName
     ) throws CertificateGenerationUnsupportedException {
         try {
             KeyPair pair = generateKeyPair(keyType);
@@ -120,7 +128,7 @@ public class CertificateAuthority {
             X509CertImpl certificate = sign(info);
 
             X509Certificate[] fullChain = prepend(certificate, certificateChain);
-            return new CertChainAndKey(fullChain, pair.getPrivate());
+            return new SimpleCertChainAndKey(fullChain, pair.getPrivate());
         } catch (NoSuchAlgorithmException | NoSuchProviderException | InvalidKeyException | CertificateException | SignatureException | NoSuchMethodError | VerifyError | NoClassDefFoundError | IOException e) {
             throw new CertificateGenerationUnsupportedException(
                 "Your runtime does not support generating certificates at runtime",
@@ -130,11 +138,10 @@ public class CertificateAuthority {
     }
 
     private X509CertImpl sign(X509CertInfo info) throws CertificateException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException, SignatureException {
-        X509Certificate issuerCertificate = certificateChain[0];
-        info.set(X509CertInfo.ISSUER, issuerCertificate.getSubjectDN());
+        info.set(X509CertInfo.ISSUER, issuer().getSubjectDN());
 
         X509CertImpl certificate = new X509CertImpl(info);
-        certificate.sign(key, issuerCertificate.getSigAlgName());
+        certificate.sign(key, issuer().getSigAlgName());
         return certificate;
     }
 

@@ -15,13 +15,19 @@
  */
 package com.github.tomakehurst.wiremock.common;
 
+import com.github.tomakehurst.wiremock.http.ssl.FileBackedX509KeyStore;
+import com.github.tomakehurst.wiremock.http.ssl.KeyStoreType;
+import com.github.tomakehurst.wiremock.http.ssl.ResourceBackedX509KeyStore;
+import com.github.tomakehurst.wiremock.http.ssl.Secret;
+import com.github.tomakehurst.wiremock.http.ssl.X509KeyStore;
 import com.google.common.io.Resources;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.security.KeyStore;
+import java.nio.file.Paths;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 
 import static com.github.tomakehurst.wiremock.common.Exceptions.throwUnchecked;
 
@@ -51,31 +57,15 @@ public class KeyStoreSettings {
         return type;
     }
 
-    public KeyStore loadStore() {
-        InputStream instream = null;
+    public X509KeyStore loadStore() {
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            instream = createInputStream();
-            trustStore.load(instream, password.toCharArray());
-            return trustStore;
-        } catch (Exception e) {
-            return throwUnchecked(e, KeyStore.class);
-        } finally {
-            if (instream != null) {
-                try {
-                    instream.close();
-                } catch (IOException ioe) {
-                    throwUnchecked(ioe);
-                }
+            if (exists()) {
+                return new FileBackedX509KeyStore(Paths.get(path), KeyStoreType.of(type), new Secret(password));
+            } else {
+                return new ResourceBackedX509KeyStore(Resources.getResource(path), KeyStoreType.of(type), new Secret(password));
             }
-        }
-    }
-
-    private InputStream createInputStream() throws IOException {
-        if (exists()) {
-            return new FileInputStream(path);
-        } else {
-            return Resources.getResource(path).openStream();
+        } catch (IOException | CertificateException | NoSuchAlgorithmException | KeyStoreException e) {
+            return throwUnchecked(e, null);
         }
     }
 

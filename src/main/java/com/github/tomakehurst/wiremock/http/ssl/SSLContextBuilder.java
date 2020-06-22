@@ -36,12 +36,12 @@ public class SSLContextBuilder {
         return new SSLContextBuilder();
     }
 
-    public SSLContextBuilder loadTrustMaterial(final KeyStore truststore) throws KeyStoreException, NoSuchAlgorithmException {
+    public SSLContextBuilder loadTrustMaterial(final X509KeyStore truststore) throws KeyStoreException, NoSuchAlgorithmException {
         return loadTrustMaterial(truststore, null);
     }
 
     public SSLContextBuilder loadTrustMaterial(
-        final KeyStore truststore,
+        final X509KeyStore truststore,
         final TrustStrategy trustStrategy
     ) throws NoSuchAlgorithmException, KeyStoreException {
 
@@ -72,9 +72,9 @@ public class SSLContextBuilder {
         return this;
     }
 
-    private TrustManager[] loadTrustManagers(KeyStore truststore, String algorithm) throws NoSuchAlgorithmException, KeyStoreException {
+    private TrustManager[] loadTrustManagers(X509KeyStore truststore, String algorithm) throws NoSuchAlgorithmException, KeyStoreException {
         final TrustManagerFactory tmfactory = TrustManagerFactory.getInstance(algorithm);
-        tmfactory.init(truststore);
+        tmfactory.init(truststore.keyStore);
         TrustManager[] tms = tmfactory.getTrustManagers();
         return tms == null ? new TrustManager[0] : tms;
     }
@@ -104,11 +104,12 @@ public class SSLContextBuilder {
     }
 
     public SSLContextBuilder loadKeyMaterial(
-            final KeyStore keystore,
-            final char[] keyPassword) throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException {
+            final X509KeyStore keystore,
+            final char[] keyPassword
+    ) throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException {
         final KeyManagerFactory kmfactory = KeyManagerFactory
                 .getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmfactory.init(keystore, keyPassword);
+        kmfactory.init(keystore.keyStore, keyPassword);
         final KeyManager[] kms = kmfactory.getKeyManagers();
         if (kms != null) {
             addAll(keyManagers, kms);

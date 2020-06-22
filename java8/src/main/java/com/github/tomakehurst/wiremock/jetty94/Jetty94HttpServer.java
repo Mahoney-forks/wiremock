@@ -8,8 +8,10 @@ import com.github.tomakehurst.wiremock.common.Notifier;
 import com.github.tomakehurst.wiremock.core.Options;
 import com.github.tomakehurst.wiremock.http.AdminRequestHandler;
 import com.github.tomakehurst.wiremock.http.StubRequestHandler;
-import com.github.tomakehurst.wiremock.http.ssl.CertificateAuthority;
 import com.github.tomakehurst.wiremock.http.ssl.CertificateGenerationUnsupportedException;
+import com.github.tomakehurst.wiremock.http.ssl.InMemoryX509KeyStore;
+import com.github.tomakehurst.wiremock.http.ssl.KeyStoreType;
+import com.github.tomakehurst.wiremock.http.ssl.Secret;
 import com.github.tomakehurst.wiremock.http.ssl.X509KeyStore;
 import com.github.tomakehurst.wiremock.jetty9.DefaultMultipartRequestConfigurer;
 import com.github.tomakehurst.wiremock.jetty9.JettyHttpServer;
@@ -29,20 +31,18 @@ import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
-import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.EnumSet;
 
-import static com.github.tomakehurst.wiremock.common.Exceptions.throwUnchecked;
+import static com.github.tomakehurst.wiremock.http.ssl.SunCertificateAuthority.generateCertificateAuthority;
 import static java.nio.file.attribute.PosixFilePermission.*;
 import static java.nio.file.attribute.PosixFilePermissions.asFileAttribute;
 
@@ -170,7 +170,7 @@ public class Jetty94HttpServer extends JettyHttpServer {
 
     private static SslContextFactory.Server buildSslContextFactory(Notifier notifier, KeyStoreSettings browserProxyCaKeyStore, KeyStoreSettings defaultHttpsKeyStore) {
         if (browserProxyCaKeyStore.exists()) {
-            X509KeyStore existingKeyStore = toX509KeyStore(browserProxyCaKeyStore);
+            X509KeyStore existingKeyStore = browserProxyCaKeyStore.loadStore();
             return certificateGeneratingSslContextFactory(notifier, browserProxyCaKeyStore, existingKeyStore);
         } else {
             try {
@@ -197,31 +197,11 @@ public class Jetty94HttpServer extends JettyHttpServer {
         return sslContextFactory;
     }
 
-    private static X509KeyStore toX509KeyStore(KeyStoreSettings browserProxyCaKeyStore) {
-        try {
-            return new X509KeyStore(browserProxyCaKeyStore.loadStore(), browserProxyCaKeyStore.password().toCharArray());
-        } catch (KeyStoreException e) {
-            // KeyStore must be loaded here, should never happen
-            return throwUnchecked(e, null);
-        }
-    }
-
     private static X509KeyStore buildKeyStore(KeyStoreSettings browserProxyCaKeyStore) throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException, CertificateGenerationUnsupportedException {
-        final CertificateAuthority certificateAuthority = CertificateAuthority.generateCertificateAuthority();
-        KeyStore keyStore = KeyStore.getInstance(browserProxyCaKeyStore.type());
-        char[] password = browserProxyCaKeyStore.password().toCharArray();
-        keyStore.load(null, password);
-        keyStore.setKeyEntry("wiremock-ca", certificateAuthority.key(), password, certificateAuthority.certificateChain());
-
+        InMemoryX509KeyStore keyStore = new InMemoryX509KeyStore(KeyStoreType.valueOf(browserProxyCaKeyStore.type()), new Secret(browserProxyCaKeyStore.password()));
+        keyStore.setKeyEntry("wiremock-ca", generateCertificateAuthority());
         Path created = createCaKeystoreFile(Paths.get(browserProxyCaKeyStore.path()));
-        try (FileOutputStream fos = new FileOutputStream(created.toFile())) {
-            try {
-                keyStore.store(fos, password);
-            } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
-                throwUnchecked(e);
-            }
-        }
-        return new X509KeyStore(keyStore, password);
+        return keyStore.saveAs(created);
     }
 
     private static Path createCaKeystoreFile(Path path) throws IOException {
